@@ -10,5 +10,6 @@ read_dk(path)
 \item{path}{path to csv file}
 }
 \description{
-Reads in raw file and then cleans it up
+Expects a csv from \url{https://www.draftkings.com/} obtained by clicking
+"Export to csv" for your contest page.
 }

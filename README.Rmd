@@ -27,21 +27,21 @@ You can install the released version of coach from [github](https://github.com/z
 devtools::install_github("zamorarr/coach")
 ```
 
-## Example
+## Usage
 Load the library.
 
-```{r message=FALSE}
+```{r load-libraies,message=FALSE}
 library(coach)
 ```
 
-Load lineup data exported from a fantasy site and read it in. Check the documention of the `read_*_*` functions for instructions on how to export the data. For example, for Draftkings you have to goto [https://www.draftkings.com/lineup/upload](https://www.draftkings.com/lineup/upload) and select the sport and slate data to export.
+Load lineup data exported from a fantasy site and read it in. Check the documention of the `read_*_*` functions for instructions on how to export the data. For example, for Draftkings you have to goto your contest page and select *Export to csv*.
 
-```{r, eval=FALSE}
+```{r preview-data,eval=FALSE}
 data <- read_dk("mydata.csv")
 print(data)
 ```
 
-```{r echo=FALSE}
+```{r preview-data2,echo=FALSE}
 # for prettier printing
 slim <- function(df) {
   cols <- c("player_id", "player", "team", "position", "salary", "fpts_avg", "fpts_proj")
@@ -55,32 +55,76 @@ print(slim(data))
 
 Add your custom projections into a column called `fpts_proj`. This is very important! If your projections aren't good then your optimized lineups won't be good either. For this example we'll just add some random noise to the player's season average fantasy points.
 
-```{r eval=FALSE}
+```{r random-proj,eval=FALSE}
 set.seed(100)
 n <- nrow(data)
 data$fpts_proj <- rnorm(n, data$fpts_avg)
 print(data)
 ```
 
-```{r echo=FALSE}
+```{r random-proj2,echo=FALSE}
 n <- nrow(data)
 data$fpts_proj <- rnorm(n, data$fpts_avg)
 print(slim(data))
 ```
 
+
+### Built-In Models
 Build a fantasy model. This model contains all the constraints imposed by the site and sport.
-```{r}
+```{r build-model}
 model <- model_dk_nfl(data)
 ```
 
 Generate three optimized lineups using your projections and the fantasy model
-```{r eval=FALSE}
+```{r optimize-model,eval=FALSE}
 optimize_generic(data, model, L = 3)
 ```
 
-```{r echo=FALSE}
+```{r optimize-model2,echo=FALSE}
 # cleaner printing
 results <- optimize_generic(data, model, L = 3)
 print(lapply(results, slim))
 ```
 
+Write these results to a file. This file can be submitted directly to the DFS site.
+
+```{r write-lineups,eval=FALSE}
+write_lineups(results, "mylineups.csv", site = "draftkings", sport = "nfl")
+```
+
+```{r write-lineups2,echo=FALSE}
+write_lineups(results, site = "draftkings", sport = "nfl")
+```
+
+### Custom Models
+You can now build custom models with the functions `model_generic()` and `add_generic_positions_constraint()`. To start, define a generic model by providing total salary allowed, roster size, and max number of players per team allowed. We will use our NFL data from above.
+
+```{r custom-model}
+model <- model_generic(data, total_salary = 50000, roster_size = 9, max_from_team = 4)
+```
+
+Now we can provide custom position constraints. These will be in the form of a named list, with FLEX or wildcard positions named with a forward slash (`/`) between positions. In the example below, we have one FLEX position that allows an RB, WR, or TE.
+
+```{r custom-positions}
+constraints <- list(
+  "QB" = 1,
+  "RB" = 2,
+  "WR" = 3,
+  "TE" = 1,
+  "RB/WR/TE" = 1,
+  "DST" = 1
+)
+model <- add_generic_positions_constraint(model, data, constraints)
+```
+
+These contraints are actually the same as the draftkings built-in model above, so we should get the same results when we optimize:
+
+```{r custom-optimization,eval=FALSE}
+optimize_generic(data, model, L = 3)
+```
+
+```{r custom-optimization2,echo=FALSE}
+# cleaner printing
+results <- optimize_generic(data, model, L = 3)
+print(lapply(results, slim))
+```

@@ -1,6 +1,8 @@
 #' Read Draftkings
 #'
-#' Reads in raw file and then cleans it up
+#' Expects a csv from \url{https://www.draftkings.com/} obtained by clicking
+#' "Export to csv" for your contest page.
+#'
 #' @param path path to csv file
 #' @export
 read_dk <- function(path) {
@@ -66,8 +68,9 @@ read_dk <- function(path) {
 read_fd <- function(path) {
   df <- utils::read.csv(path, stringsAsFactors = FALSE, check.names = FALSE)
 
-  # keep only first columns
-  df <- df[1:12]
+  # keep only first columns and fpts_proj
+  cols_to_keep <- c(1:12, which(colnames(df) == "fpts_proj"))
+  df <- df[cols_to_keep]
 
   # add fpts_proj if it doesn't exist
   if (!("fpts_proj" %in% colnames(df))) {
@@ -76,7 +79,7 @@ read_fd <- function(path) {
 
   # check column headers
   headers <- c("Id","Position","First Name","Nickname","Last Name","FPPG",
-               "Played","Salary","Game","Team","Opponent","Injury Indicator",
+               "Salary","Game","Team","Opponent","Injury Indicator",
                "fpts_proj")
   assert_has_cols(df, headers)
   df <- df[headers]
@@ -93,6 +96,9 @@ read_fd <- function(path) {
 
   # fix injury NAs
   df_tidy[["injury"]] <- with(df_tidy, ifelse(nchar(injury) == 0, NA_character_, injury))
+
+  # if team is NA, make it player name
+  df_tidy$team <- ifelse(is.na(df_tidy$team), df_tidy$player, df_tidy$team)
 
   # add row ids
   df_tidy <- add_row_id(df_tidy)
@@ -128,5 +134,5 @@ add_dk_opp_team <- function(df) {
     location = rep(home_team, 2),
     stringsAsFactors = FALSE)
 
-  merge(df, teams, by.x = "teamabbrev", by.y = "team")
+  merge(df, teams, by.x = "teamabbrev", by.y = "team", all.x = TRUE)
 }

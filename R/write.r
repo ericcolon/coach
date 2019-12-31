@@ -106,6 +106,35 @@ normalize_fd_mlb <- function(pos) {
   normalize_positions(new_pos, pos_max, wildcard)
 }
 
+#' @rdname normalize_positions
+#' @keywords internal
+normalize_fd_nascar <- function(pos) {
+  stopifnot(length(pos) == 5L)
+
+  # normalize D to driver
+  new_pos <- gsub("^D$", "Driver", pos)
+  new_pos
+}
+
+#' @rdname normalize_positions
+#' @keywords internal
+normalize_fdr_nba <- function(pos) {
+  stopifnot(length(pos) == 8L)
+
+  # normalize guards
+  new_pos <- gsub("PG|SG", "G", pos)
+
+  # normalize forwards
+  new_pos <- gsub("SF|PF|C", "F/C", new_pos)
+
+  # normalize util
+  pos_max <- c("G" = 3, "F/C" = 3)
+  wildcard <- "UTIL"
+  normalize_positions(new_pos, pos_max, wildcard)
+
+}
+
+
 #' Normalize a lineup based on position
 #'
 #' Applies a utility or flex tag to appropriate lineup positions
@@ -115,8 +144,8 @@ normalize_fd_mlb <- function(pos) {
 #' @param sport string
 #' @param colname default column to apply normalization to
 #' @export
-normalize_lineup <- function(lineup, site = c("draftkings", "fanduel"),
-                             sport = c("nfl", "mlb", "nba", "nhl"),
+normalize_lineup <- function(lineup, site = c("draftkings", "fanduel", "fantasydraft"),
+                             sport = c("nfl", "mlb", "nba", "nhl", "nascar"),
                              colname = "position") {
   site <- match.arg(site)
   sport <- match.arg(sport)
@@ -139,6 +168,10 @@ normalize_lineup <- function(lineup, site = c("draftkings", "fanduel"),
       f <- normalize_dk_nhl
       pos_levels <- c("C", "W", "D", "G")
     }
+    else if (sport == "nascar") {
+      f <- NULL
+      pos_levels <- "D"
+    }
   } else if (site == "fanduel") {
     if (sport == "nfl") {
       f <- normalize_fd_nfl
@@ -156,6 +189,18 @@ normalize_lineup <- function(lineup, site = c("draftkings", "fanduel"),
       f <- NULL
       pos_levels <- c("C", "W", "D", "G")
     }
+    else if (sport == "nascar") {
+      f <- normalize_fd_nascar
+      pos_levels <- "Driver"
+    }
+  } else if (site == "fantasydraft") {
+    if (sport == "nba") {
+      f <- normalize_fdr_nba
+      pos_levels <- c("G", "F/C", "UTIL")
+    } else {
+      stop(sprintf("position normalizer for %s/%s not implemented yet!", site, sport),
+           call. = FALSE)
+    }
   }
 
   # apply normalization
@@ -171,10 +216,14 @@ normalize_lineup <- function(lineup, site = c("draftkings", "fanduel"),
 #' Convert lineup to submission format
 #'
 #' @param lineup a normalized lineup
+#' @param site name of DFS site
+#' @param sport name of sport
 #' @param ... additional arguments passed to \code{\link{normalize_lineup}}
 #' @keywords internal
-convert_lineup <- function(lineup, ...) {
-  new_lineup <- normalize_lineup(lineup, ...)
+convert_lineup <- function(lineup,
+                           site = c("draftkings", "fanduel", "fantasydraft"),
+                           sport = c("nfl", "mlb", "nba", "nhl", "nascar"), ...) {
+  new_lineup <- normalize_lineup(lineup, site, sport, ...)
   player_ids <- as.list(new_lineup[["player_id"]])
 
   x <- as.data.frame(player_ids, stringsAsFactors = FALSE)
@@ -186,11 +235,20 @@ convert_lineup <- function(lineup, ...) {
 #'
 #' @param lineups a normalized lineup
 #' @param path local disk path
+#' @param site name of DFS site
+#' @param sport name of sport
 #' @param ... additional arguments passed to \code{\link{normalize_lineup}}
 #' @export
-write_lineups <- function(lineups, path = NULL, ...) {
-  split_lineups <- split(lineups, lineups[["lineup"]])
-  converted_lineups <- lapply(split_lineups, convert_lineup, ...)
+#'
+#' @examples
+#' \dontrun{
+#' lineups <- optimize_generic(nhl, model)
+#' write_lineups(lineups, "mylineups.csv", site = "fanduel", sport = "nhl")
+#' }
+write_lineups <- function(lineups, path = NULL,
+                          site = c("draftkings", "fanduel", "fantasydraft"),
+                          sport = c("nfl", "mlb", "nba", "nhl", "nascar"), ...) {
+  converted_lineups <- lapply(lineups, convert_lineup, site, sport, ...)
   df <- do.call(rbind, converted_lineups)
 
   if (!is.null(path)) {
